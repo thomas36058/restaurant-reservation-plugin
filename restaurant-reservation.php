@@ -54,7 +54,7 @@ function create_reservation_cpt() {
       'labels' => $labels,
       'public' => true,
       'has_archive' => true,
-      'supports' => array('title', 'custom-fields'), // Adjust supports as needed
+      'supports' => array('title', 'editor', 'custom-fields'), // Adjust supports as needed
       'rewrite' => array('slug' => 'reservations'),
   );
 
@@ -136,21 +136,56 @@ function handle_table_reservation( WP_REST_Request $request ) {
   // Create a new reservation post in the custom post type
   $reservation_post = array(
     'post_title'   => $customer_name,
-    'post_content' => 'Reserved table ID: ' . $table_id . '. Number of people: ' . $num_people,
+    'post_content' => '',
     'post_status'  => 'publish',
-    'post_type'    => 'reservation', // Use your CPT slug here
+    'post_type'    => 'reservation',
     'meta_input'   => array(
-        'table_id'       => $table_id,
-        'customer_name'  => $customer_name,
-        'num_people'     => $num_people,
+      'table_id'       => $table_id,
+      'customer_name'  => $customer_name,
+      'num_people'     => $num_people,
     ),
   );
   // Insert the reservation post into the database
   $reservation_id = wp_insert_post($reservation_post);
+
+  if ($reservation_id) {
+    update_field('table_id', $table_id, $reservation_id);
+    update_field('number_of_peoples', $num_people, $reservation_id);
+  }
 
   if (is_wp_error($reservation_id)) {
     return new WP_Error('reservation_error', 'Failed to create reservation.', array('status' => 500));
   }
 
   return new WP_REST_Response(array('message' => 'Table reserved successfully!'), 200);
+}
+
+// Register route to list tables
+add_action( 'rest_api_init', function() {
+  register_rest_route( 'restaurant/v1', '/reservations/', array(
+    'methods'  => 'GET',
+    'callback' => 'get_reservations',
+  ));
+});
+
+// Callback function that returns reservations
+function get_reservations( $data ) {
+  $args = array(
+    'post_type' => 'reservation',
+    'posts_per_page' => -1,
+  );
+  $reservations = get_posts( $args );
+
+  // Transform the result into a format that the frontend can use
+  $response = array();
+  foreach( $reservations as $reservation ) {
+    $response[] = array(
+      'id' => $reservation->ID,
+      'customer_name' => $reservation->post_title,
+      'table_id' => get_field('table_id', $reservation->ID),
+      'number_of_peoples' => get_field('number_of_peoples', $reservation->ID),
+    );
+  }
+
+  return new WP_REST_Response( $response, 200 );
 }
