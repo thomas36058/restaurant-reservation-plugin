@@ -189,3 +189,22 @@ function get_reservations( $data ) {
 
   return new WP_REST_Response( $response, 200 );
 }
+
+// Callback function to delete reservation
+add_action('rest_api_init', function () {
+  register_rest_route('restaurant/v1', '/reservation/(?P<id>\d+)', array(
+      'methods' => 'DELETE',
+      'callback' => 'delete_reservation',
+      'permission_callback' => '__return_true',
+  ));
+});
+
+function delete_reservation( $data ) {
+  $reservation_id = $data['id'];
+
+  if( wp_delete_post($reservation_id) ) {
+    return new WP_REST_Response('Reservation deleted successfully', 200); 
+  } else {
+    return new WP_REST_Response('Error deleting the reservation', 500);
+  }
+}
